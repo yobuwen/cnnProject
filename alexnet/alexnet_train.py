@@ -13,7 +13,8 @@ import torchvision
 import matplotlib.pyplot as plt
 import numpy as np
 import torch.optim as optim
-from tqdm import tqdm
+from tqdm import tqdm#用于生产进度条
+import time
 
 from alexnet_model import AlexNet
 
@@ -23,14 +24,15 @@ def main():
     print("using {} device.".format(device))
 
     data_transform = {
-        "train": transforms.Compose([transforms.RandomResizedCrop(224),
-                                     transforms.RandomHorizontalFlip(),
+        "train": transforms.Compose([transforms.RandomResizedCrop(224),#随机裁剪
+                                     transforms.RandomHorizontalFlip(),#翻转
                                      transforms.ToTensor(),
                                      transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]),
         "val": transforms.Compose([transforms.Resize((224, 224)),  # cannot 224, must (224, 224)
                                    transforms.ToTensor(),
                                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])}
 
+    # 自定义图像数据集时使用
     # data_root = os.path.abspath(os.path.join(os.getcwd(), "../.."))  # get data root path
     # image_path = os.path.join(data_root, "data_set", "flower_data")  # flower data set path
     # assert os.path.exists(image_path), "{} path does not exist.".format(image_path)
@@ -76,13 +78,18 @@ def main():
     # imshow(utils.make_grid(test_image))
 
     train_set = torchvision.datasets.CIFAR10(root='./data', train=True, download=False, transform=data_transform["train"])
-    train_loader = torch.utils.data.DataLoader(train_set, batch_size=36, shuffle=True, num_workers=12)
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=500, shuffle=True, num_workers=12)
 
     val_set = torchvision.datasets.CIFAR10(root='./data', train=False, download=False, transform=data_transform["val"])
     val_loader = torch.utils.data.DataLoader(val_set, batch_size=500, shuffle=False, num_workers=0)
     val_num = len(val_set)
 
     net = AlexNet(num_classes=10, init_weights=True)
+
+    # load model weights
+    weights_path = "./AlexNet.pth"
+    assert os.path.exists(weights_path), "file: '{}' dose not exist.".format(weights_path)
+    net.load_state_dict(torch.load(weights_path))
 
     net.to(device)
     loss_function = nn.CrossEntropyLoss()
@@ -95,8 +102,9 @@ def main():
     train_steps = len(train_loader)
     for epoch in range(epochs):
         # train
-        net.train()
+        net.train()#允许使用dropout方法
         running_loss = 0.0
+        # t1 = time.perf_counter()
         train_bar = tqdm(train_loader)
         for step, data in enumerate(train_bar):
             images, labels = data
@@ -109,12 +117,12 @@ def main():
             # print statistics
             running_loss += loss.item()
 
-            train_bar.desc = "train epoch[{}/{}] loss:{:.3f}".format(epoch + 1,
-                                                                     epochs,
-                                                                     loss)
+            train_bar.desc = "train epoch[{}/{}] loss:{:.3f}".format(epoch + 1, epochs, loss)#在进度条前加上特定内容
+
+        # print( time.perf_counter() - t1)
 
         # validate
-        net.eval()
+        net.eval()#disable使用dropout方法
         acc = 0.0  # accumulate accurate number / epoch
         with torch.no_grad():
             val_bar = tqdm(val_loader)
